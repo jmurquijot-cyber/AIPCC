@@ -1,0 +1,37 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="mx.escuelaministerio.app.estable"
+    android:versionCode="34"
+    android:versionName="1.8.3">
+
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <application
+        android:name="mx.escuelaministerio.app.MinisterioApplication"
+        android:allowBackup="true"
+        android:icon="@drawable/app_icon_round"
+        android:label="@string/app_name"
+        android:roundIcon="@drawable/app_icon_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.EscuelaMinisterio">
+        <activity
+            android:name="mx.escuelaministerio.app.MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <receiver
+            android:name="mx.escuelaministerio.app.ReminderReceiver"
+            android:exported="false" />
+
+        <provider
+            android:name="mx.escuelaministerio.app.ReportFileProvider"
+            android:authorities="mx.escuelaministerio.app.estable.files"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+    </application>
+</manifest>

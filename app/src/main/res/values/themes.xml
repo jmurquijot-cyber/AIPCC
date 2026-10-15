@@ -1,0 +1,15 @@
+<resources>
+    <style name="Theme.EscuelaMinisterio" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">@color/color_accent</item>
+        <item name="android:navigationBarColor">#0B5E43</item>
+        <item name="android:statusBarColor">#084A35</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowCloseOnTouchOutside">false</item>
+        <item name="android:alertDialogTheme">@style/Theme.EscuelaMinisterio.Dialog</item>
+    </style>
+
+    <style name="Theme.EscuelaMinisterio.Dialog" parent="android:style/Theme.Material.Light.Dialog.Alert">
+        <item name="android:windowCloseOnTouchOutside">false</item>
+    </style>
+</resources>
