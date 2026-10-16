@@ -30,5 +30,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AIPCC"
+rootProject.name = "EscuelaMinisterioTeocratico"
 include(":app")
