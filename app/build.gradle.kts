@@ -12,7 +12,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "mx.escuelaministerio.app.estable"
+        applicationId = "org.aipcc.congregacion"
         minSdk = 26
         targetSdk = 36
         versionCode = 35
