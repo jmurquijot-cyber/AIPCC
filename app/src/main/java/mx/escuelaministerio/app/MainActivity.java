@@ -1140,7 +1140,9 @@ public final class MainActivity extends Activity {
             shareFile(target,"text/csv","Datos de Vida y Ministerio "+selectedMonth,null);
         }catch(Exception error){safeDialog().setTitle("No se pudo exportar Vida y Ministerio").setMessage(error.getMessage()==null?"Error al generar el archivo.":error.getMessage()).setPositiveButton("Aceptar",null).show();}
     }
-    private String csvCell(String value){String text=value==null?"":value;return "\\"" + text.replace("\\"", "\\"\\"") + "\\"";}
+    private String csvCell(String value) {
+    String text = value == null ? "" : value;
+    return "\"" + text.replace("\"", "\"\"") + "\"";
     private void createLifeMonthlyPdf(){try{File file=new LifeMinistryReportManager(this,db).monthlyPdf(selectedMonth);shareFile(file,"application/pdf","Programa Vida y Ministerio "+selectedMonth,null);}catch(Exception error){toast("No fue posible generar el PDF: "+error.getMessage());}}
     private void selectLifeWeeklyPdf(){LinearLayout form=column();EditText date=dateInput(activeWeek);form.addView(label("Semana del reporte · Sala Principal",14,true));form.addView(date);AlertDialog dialog=safeDialog().setTitle("PDF semanal de Vida y Ministerio").setView(form).setNegativeButton("Cancelar",null).setPositiveButton("Generar",null).create();dialog.setOnShowListener(x->dialog.getButton(-1).setOnClickListener(v->{String day=value(date);try{day=db.resolveLifeMinistryDate(day);File file=new LifeMinistryReportManager(this,db).weeklyPdf(day);dialog.dismiss();shareFile(file,"application/pdf","Programa semanal Vida y Ministerio "+day,null);}catch(Exception error){toast("No fue posible generar el PDF: "+error.getMessage());}}));dialog.show();}
     private void createLifeAssignmentsPdf(){try{File file=new LifeMinistryReportManager(this,db).assignmentPdf(selectedMonth);shareFile(file,"application/pdf","Asignaciones Vida y Ministerio "+selectedMonth,null);}catch(Exception error){toast("No fue posible generar el PDF: "+error.getMessage());}}
