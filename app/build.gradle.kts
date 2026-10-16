@@ -1,6 +1,11 @@
+
 plugins {
     id("com.android.application")
 }
+
+val releaseStorePassword = System.getenv("AIPCC_KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("AIPCC_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("AIPCC_KEY_PASSWORD")
 
 android {
     namespace = "mx.escuelaministerio.app"
@@ -14,10 +19,23 @@ android {
         versionName = "1.8.4"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("aipcc-release.jks")
+            storePassword = releaseStorePassword
+            keyAlias = releaseKeyAlias
+            keyPassword = releaseKeyPassword
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 
