@@ -1,6 +1,6 @@
-# AAPRC · Administración de Asignaciones para las Reuniones Cristianas
+# AIPCC · Administración Integral para la Congregación Cristiana
 
-La versión 1.8.4 incorpora el reporte mensual de Asignaciones Mecánicas. Mantiene el identificador estable `mx.escuelaministerio.app.estable`, por lo que conservará la base de datos al actualizar una versión estable anterior.
+La versión 1.8.4 incorpora el reporte mensual de Asignaciones Mecánicas. Esta edición de AIPCC usa el identificador independiente `org.aipcc.congregacion` para instalarse en paralelo con AAPRC. Al ser una aplicación separada, no comparte automáticamente la base de datos ni las preferencias de AAPRC.
 
 Aplicación Android modular para administrar asignaciones de las reuniones cristianas.
 
