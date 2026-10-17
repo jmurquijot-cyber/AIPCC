@@ -51,7 +51,29 @@ final class LifeMinistryExcelImportManager {
     private static String decode(String raw,String type,List<String> shared){if(raw==null)return "";if("s".equals(type)){try{int index=Integer.parseInt(raw.trim());return index>=0&&index<shared.size()?shared.get(index):"";}catch(Exception ignored){return "";}}return raw.trim();}
     private static int column(String ref){int value=0;for(int i=0;i<ref.length();i++){char c=Character.toUpperCase(ref.charAt(i));if(c<'A'||c>'Z')break;value=value*26+c-'A'+1;}return Math.max(0,value-1);}
     private static boolean hasHeader(Map<String,Integer> headers,String...aliases){for(String alias:aliases)if(headers.containsKey(normalize(alias)))return true;for(String key:headers.keySet())for(String alias:aliases){String normalized=normalize(alias);if(normalized.length()>3&&(key.equals(normalized)||key.contains(normalized)))return true;}return false;}
-    private static String cell(Row row,Map<String,Integer> headers,String...aliases){for(String alias:aliases){Integer column=headers.get(normalize(alias));if(column!=null)return row.cells.getOrDefault(column,"").trim();}return "";}
+    private static String cell(Row row,Map<String,Integer> headers,String...aliases){
+        // Primero intenta coincidencia exacta normalizada.
+        for(String alias:aliases){
+            Integer column=headers.get(normalize(alias));
+            if(column!=null){
+                String value=row.cells.getOrDefault(column,"").trim();
+                if(!value.isEmpty()) return value;
+            }
+        }
+        // Compatibilidad con encabezados extendidos o con texto adicional
+        // (por ejemplo, "Nombre de la asignación (obligatorio)").
+        for(Map.Entry<String,Integer> header:headers.entrySet()){
+            String key=normalize(header.getKey());
+            for(String alias:aliases){
+                String candidate=normalize(alias);
+                if(key.equals(candidate) || (candidate.length()>3 && key.contains(candidate))){
+                    String value=row.cells.getOrDefault(header.getValue(),"").trim();
+                    if(!value.isEmpty()) return value;
+                }
+            }
+        }
+        return "";
+    }
     private static boolean dataBlank(Row row,Map<String,Integer> headers){return cell(row,headers,"fecha").isEmpty()&&cell(row,headers,"numero de asignacion","numero").isEmpty()&&cell(row,headers,"nombre de asignacion","asignacion").isEmpty()&&cell(row,headers,"tiempo minutos","tiempo","minutos").isEmpty()&&cell(row,headers,"tema").isEmpty();}
     private static String required(String value,String name){if(value==null||value.trim().isEmpty())throw new IllegalArgumentException(name+" es obligatorio");return value.trim();}
     private static int integer(String value,String name){try{return(int)Math.round(Double.parseDouble(value.trim()));}catch(Exception error){throw new IllegalArgumentException(name+" debe ser numérico");}}
