@@ -138,7 +138,26 @@ final class MinisterioDb extends SQLiteOpenHelper {
     }
 
     int upsertImportedStudent(Models.Student s) {
-        SQLiteDatabase db = getWritableDatabase(); ContentValues v = studentCoreValues(s);
+        SQLiteDatabase db = getWritableDatabase();
+        // Legacy templates update core fields only; retain classifications already stored in the database.
+        if (!s.extendedClassificationsProvided) {
+            Models.Student oldStudent = null;
+            if (s.id > 0) {
+                for (Models.Student existing : students(true)) if (existing.id == s.id) { oldStudent = existing; break; }
+            }
+            if (oldStudent == null) {
+                String targetName = key(s.name), targetPhone = phoneKey(s.phone);
+                for (Models.Student existing : students(true)) {
+                    if (key(existing.name).equals(targetName)
+                            && (targetPhone.isEmpty() ? phoneKey(existing.phone).isEmpty() : phoneKey(existing.phone).equals(targetPhone))) {
+                        oldStudent = existing; break;
+                    }
+                }
+            }
+            if (oldStudent != null) copyStudentClassifications(oldStudent, s);
+        }
+        SQLiteDatabase dbForValues = db;
+        ContentValues v = s.extendedClassificationsProvided ? studentValues(s) : studentCoreValues(s);
         if (s.id > 0 && rowExists(db, "students", s.id)) {
             db.update("students", v, "id=?", new String[]{String.valueOf(s.id)}); return 2;
         }
@@ -152,6 +171,15 @@ final class MinisterioDb extends SQLiteOpenHelper {
         if(!sameName.isEmpty())return IMPORT_REVIEW;
         if (s.id > 0 && !rowExists(db,"students",s.id)) v.put("id", s.id);
         s.id = db.insertOrThrow("students", null, v); return 1;
+    }
+
+    private void copyStudentClassifications(Models.Student from, Models.Student to) {
+        to.vidaMinisterio=from.vidaMinisterio; to.discursoPublico=from.discursoPublico; to.atalaya=from.atalaya;
+        to.lectorAtalaya=from.lectorAtalaya; to.acomodadorEntrada=from.acomodadorEntrada;
+        to.acomodadorAuditorio1=from.acomodadorAuditorio1; to.acomodadorAuditorio2=from.acomodadorAuditorio2;
+        to.microfono1=from.microfono1; to.microfono2=from.microfono2; to.plataforma1=from.plataforma1;
+        to.plataforma2=from.plataforma2; to.oracionInicial=from.oracionInicial; to.oracionFinal=from.oracionFinal;
+        to.estudioLibro=from.estudioLibro; to.lectorEstudioLibro=from.lectorEstudioLibro; to.groupNumber=from.groupNumber;
     }
 
     private ContentValues studentValues(Models.Student s) {

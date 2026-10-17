@@ -32,6 +32,8 @@ final class Models {
         boolean estudioLibro;
         boolean lectorEstudioLibro;
         int groupNumber;
+        // True when imported workbook explicitly contains extended classification columns.
+        boolean extendedClassificationsProvided;
 
         boolean isSuspended() { return rating == 0; }
         boolean isMale() {

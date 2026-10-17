@@ -101,6 +101,28 @@ final class ExcelImportManager {
                 s.pioneer = bool(cell(row, h, "precursor"));
                 s.rating = integer(required(cell(row, h, "calificador"), "Calificador"), "Calificador");
                 if (s.rating < 0 || s.rating > 10) throw new IllegalArgumentException("Calificador debe estar entre 0 y 10");
+                // Las columnas extendidas son opcionales para mantener compatibilidad con plantillas antiguas.
+                s.extendedClassificationsProvided = hasAnyStudentClassificationHeader(h);
+                if (s.extendedClassificationsProvided) {
+                    s.vidaMinisterio = optionalBool(cell(row, h, "vida y ministerio", "vida_ministerio"));
+                    s.discursoPublico = optionalBool(cell(row, h, "discurso publico", "discurso_publico"));
+                    s.atalaya = optionalBool(cell(row, h, "atalaya"));
+                    s.lectorAtalaya = optionalBool(cell(row, h, "lector de atalaya", "lector_atalaya"));
+                    s.acomodadorEntrada = optionalBool(cell(row, h, "acomodador entrada", "acomodador_entrada"));
+                    s.acomodadorAuditorio1 = optionalBool(cell(row, h, "acomodador auditorio 1", "acomodador_auditorio_1"));
+                    s.acomodadorAuditorio2 = optionalBool(cell(row, h, "acomodador auditorio 2", "acomodador_auditorio_2"));
+                    s.microfono1 = optionalBool(cell(row, h, "microfono 1", "microfono_1"));
+                    s.microfono2 = optionalBool(cell(row, h, "microfono 2", "microfono_2"));
+                    s.plataforma1 = optionalBool(cell(row, h, "plataforma 1", "plataforma_1"));
+                    s.plataforma2 = optionalBool(cell(row, h, "plataforma 2", "plataforma_2"));
+                    s.oracionInicial = optionalBool(cell(row, h, "oracion inicial", "oracion_inicial"));
+                    s.oracionFinal = optionalBool(cell(row, h, "oracion final", "oracion_final"));
+                    s.estudioLibro = optionalBool(cell(row, h, "estudio de libro", "estudio_libro"));
+                    s.lectorEstudioLibro = optionalBool(cell(row, h, "lector estudio de libro", "lector_estudio_libro"));
+                    String group = cell(row, h, "numero de grupo", "numero grupo", "group_number");
+                    s.groupNumber = group.isEmpty() ? 0 : integer(group, "Número de grupo");
+                    if (s.groupNumber < 0) throw new IllegalArgumentException("Número de grupo no puede ser negativo");
+                }
                 int status=db.upsertImportedStudent(s);if(status==MinisterioDb.IMPORT_ADDED)out.studentsAdded++;else if(status==MinisterioDb.IMPORT_UPDATED)out.studentsUpdated++;else if(status==MinisterioDb.IMPORT_MATCHED)out.studentsDuplicatesAvoided++;else{out.studentsReview++;out.warnings.add("Alumnos, fila "+row.number+": «"+s.name+"» coincide por nombre pero sus datos son distintos; no se importó para evitar duplicarlo.");}
             } catch (Exception e) { out.errors.add("Alumnos, fila " + row.number + ": " + message(e)); }
         }
@@ -153,6 +175,23 @@ final class ExcelImportManager {
             int count = entry.getValue().size();
             if (count < 4) out.warnings.add(entry.getKey() + ": solo se importaron " + count + " presentaciones; revise que esa semana tenga 4 o 5.");
         }
+    }
+
+    private static boolean hasAnyStudentClassificationHeader(Map<String, Integer> h) {
+        String[] keys = {"vida y ministerio","vida_ministerio","discurso publico","discurso_publico",
+                "atalaya","lector de atalaya","lector_atalaya","acomodador entrada","acomodador_entrada",
+                "acomodador auditorio 1","acomodador_auditorio_1","acomodador auditorio 2","acomodador_auditorio_2",
+                "microfono 1","microfono_1","microfono 2","microfono_2","plataforma 1","plataforma_1",
+                "plataforma 2","plataforma_2","oracion inicial","oracion_inicial","oracion final","oracion_final",
+                "estudio de libro","estudio_libro","lector estudio de libro","lector_estudio_libro",
+                "numero de grupo","numero grupo","group_number"};
+        for (String key : keys) if (h.containsKey(key)) return true;
+        return false;
+    }
+
+    private static boolean optionalBool(String value) {
+        if (value == null || value.trim().isEmpty()) return false;
+        return bool(value);
     }
 
     private static boolean isStudentSheet(Map<String, Integer> h) {
