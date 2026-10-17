@@ -754,6 +754,39 @@ private <T extends DuplicateReview> T duplicateReview(boolean merge,T out){SQLit
     }
 
     private ContentValues lifePartValues(Models.LifePart part){ContentValues values=new ContentValues();values.put("meeting_date",part.date);values.put("number",part.number);values.put("assignment_name",part.assignmentName.trim());values.put("minutes",part.minutes);values.put("topic",part.topic.trim());return values;}
+    long importedLifeStudentId(String importedName) {
+        String name=importedName==null?"":importedName.trim();
+        if(name.isEmpty())return 0;
+        List<Long> ids=new ArrayList<>();
+        try(Cursor c=getReadableDatabase().query("students",new String[]{"id"},"name=? COLLATE NOCASE AND rating>0",new String[]{name},null,null,"name COLLATE NOCASE")){
+            while(c.moveToNext())ids.add(c.getLong(0));
+        }
+        if(ids.isEmpty())throw new IllegalArgumentException("No se encontró un alumno activo llamado: "+name);
+        if(ids.size()>1)throw new IllegalArgumentException("Hay más de un alumno activo llamado "+name+"; use un nombre que permita distinguirlo.");
+        return ids.get(0);
+    }
+
+    void upsertImportedLifeAssignment(long partId, Long studentId, Long readerId) {
+        SQLiteDatabase sql=getWritableDatabase();
+        long existingId=0,existingStudent=0,existingReader=0;
+        try(Cursor c=sql.query("life_ministry_assignments",new String[]{"id","student_id","reader_id"},"part_id=?",new String[]{String.valueOf(partId)},null,null,null,"1")){
+            if(c.moveToFirst()){existingId=c.getLong(0);existingStudent=c.getLong(1);existingReader=c.getLong(2);}
+        }
+        long finalStudent=studentId==null?existingStudent:studentId;
+        long finalReader=readerId==null?existingReader:readerId;
+        if(finalStudent<=0)throw new IllegalArgumentException("Indique el alumno en la columna Alumno asignado para crear la asignación.");
+        if(finalReader>0&&finalReader==finalStudent)throw new IllegalArgumentException("El alumno y el lector deben ser personas distintas.");
+        if(existingId>0){
+            ContentValues values=new ContentValues();
+            if(studentId!=null)values.put("student_id",finalStudent);
+            if(readerId!=null)values.put("reader_id",finalReader);
+            if(values.size()>0)sql.update("life_ministry_assignments",values,"id=?",new String[]{String.valueOf(existingId)});
+        }else{
+            ContentValues values=new ContentValues();values.put("part_id",partId);values.put("student_id",finalStudent);values.put("reader_id",finalReader);
+            sql.insertOrThrow("life_ministry_assignments",null,values);
+        }
+    }
+
 
     List<Models.LifePart> lifeParts(String month){List<Models.LifePart> out=new ArrayList<>();String where=month==null?null:"meeting_date LIKE ?";String[] args=month==null?null:new String[]{month+"%"};try(Cursor c=getReadableDatabase().query("life_ministry_parts",null,where,args,null,null,"meeting_date,number")){while(c.moveToNext()){Models.LifePart part=readLifePart(c);if(!meeting(part.date).visit||!part.isBookStudy())out.add(part);}}return out;}
 
