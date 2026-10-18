@@ -16,6 +16,9 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
+import android.print.PrintManager;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -242,7 +245,7 @@ public final class MainActivity extends Activity {
         HorizontalScrollView navScroll=new HorizontalScrollView(this);navScroll.setHorizontalScrollBarEnabled(false);
         LinearLayout nav=row();nav.setPadding(dp(5),dp(5),dp(5),dp(5));nav.setBackgroundColor(Color.WHITE);
         nav.addView(navButton("Inicio",v->showHome()));nav.addView(navButton("Programa",v->showPublicProgram()));
-        nav.addView(navButton("Oradores visitantes",v->showVisitingSpeakers()));nav.addView(navButton("Config. reunión",v->showPublicScheduleSettings()));nav.addView(navButton("Historial",v->showPublicHistory()));
+        nav.addView(navButton("Oradores visitantes",v->showVisitingSpeakers()));nav.addView(navButton("Historial",v->showPublicHistory()));
         nav.addView(navButton("Alumnos",v->showStudents()));nav.addView(navButton("Colores",v->showSettings()));
         navScroll.addView(nav);root.addView(navScroll,new LinearLayout.LayoutParams(-1,dp(55)));
         content=new FrameLayout(this);root.addView(content,new LinearLayout.LayoutParams(-1,0,1));setContentView(root);
@@ -730,57 +733,12 @@ public final class MainActivity extends Activity {
         return publicName(meeting.localSpeakerId);
     }
 
-    private SharedPreferences publicSchedulePrefs(){
-        return getSharedPreferences("public_meeting_schedule",MODE_PRIVATE);
-    }
-
-    private int publicMeetingDay(){
-        return publicSchedulePrefs().getInt("day_of_week",DayOfWeek.SUNDAY.getValue());
-    }
-
-    private String publicMeetingTime(){
-        return publicSchedulePrefs().getString("meeting_time","");
-    }
-
-    private void showPublicScheduleSettings(){
-        ScrollView page=page("Configuración anual de la reunión");
-        LinearLayout body=body(page);
-        body.addView(label("Estos datos pueden cambiar cada año y se usan como referencia al preparar el programa.",14,false));
-        int currentYear=java.time.Year.now().getValue();
-        EditText year=input("Año",String.valueOf(publicSchedulePrefs().getInt("year",currentYear)));
-        year.setInputType(InputType.TYPE_CLASS_NUMBER);
-        body.addView(label("Año del programa",14,true));body.addView(year);
-        String[] dayLabels={"Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"};
-        Spinner day=spinner(Arrays.asList(dayLabels));
-        day.setSelection(Math.max(0,Math.min(6,publicMeetingDay()-1)));
-        body.addView(label("Día habitual de la reunión",14,true));body.addView(day);
-        EditText time=input("Hora (ej. 10:00 a. m.)",publicMeetingTime());
-        body.addView(label("Hora de inicio",14,true));body.addView(time);
-        body.addView(button("Guardar configuración anual",v->{
-            try{
-                String yearText=value(year).trim();
-                int yearValue=Integer.parseInt(yearText);
-                if(yearValue<2000||yearValue>2200)throw new IllegalArgumentException("Escriba un año válido.");
-                String timeText=value(time).trim();
-                if(!timeText.isEmpty()&&!timeText.matches("(?i)^(0?[1-9]|1[0-2]):[0-5][0-9]\\s*(a\\.?\\s*m\\.?|p\\.?\\s*m\\.?)$")&&!timeText.matches("^(0?[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$"))
-                    throw new IllegalArgumentException("Use una hora como 10:00 a. m. o 14:00.");
-                int dayValue=day.getSelectedItemPosition()+1;
-                publicSchedulePrefs().edit().putInt("year",yearValue).putInt("day_of_week",dayValue).putString("meeting_time",timeText).apply();
-                selectedMonth=String.format(Locale.US,"%04d-01",yearValue);
-                toast("Configuración anual guardada.");showPublicProgram();
-            }catch(Exception e){toast("No se pudo guardar: "+e.getMessage());}
-        }));
-        body.addView(button("Volver al programa",v->showPublicProgram()));
-    }
-
     private void showPublicProgram(){
         ScrollView page=page("Reunión Pública y Atalaya");LinearLayout body=body(page);
         body.addView(label("Mes del programa",14,true));
         Button month=button(selectedMonthLabel(),v->openMonthPicker(this::showPublicProgram));
         month.setAllCaps(false);month.setCompoundDrawablesWithIntrinsicBounds(0,0,android.R.drawable.ic_menu_my_calendar,0);body.addView(month);
-        body.addView(label("Día habitual: "+DayOfWeek.of(publicMeetingDay()).getDisplayName(TextStyle.FULL,new Locale("es","MX"))+
-                (publicMeetingTime().trim().isEmpty()?"":" · Hora: "+publicMeetingTime())+
-                ". Los participantes se toman del catálogo común de alumnos.",13,false));
+        body.addView(label("La reunión se programa normalmente el domingo, pero puede elegirse otra fecha. Los participantes se toman del catálogo común de alumnos.",13,false));
         body.addView(button("+ Configurar nueva reunión",v->editPublicMeeting(null)));
         List<Models.PublicMeeting> weeks=db.publicMeetings(selectedMonth);
         if(weeks.isEmpty())body.addView(label("No hay reuniones del fin de semana registradas para este mes.",15,false));
@@ -802,6 +760,7 @@ public final class MainActivity extends Activity {
             }
             LinearLayout actions=row();
             actions.addView(button("Editar",v->editPublicMeeting(week)));
+            actions.addView(button("Imprimir programa",v->printPublicMeeting(week)));
             if(!week.suspended){
                 actions.addView(button("Evaluar orador",v->editPublicEvaluation(week)));
                 actions.addView(button("Mecánicas",v->{selectedMonth=week.date.substring(0,7);activeWeek=week.date;showActiveWeekOnly=true;appState.edit().putString("active_week",activeWeek).putBoolean("show_active_week_only",true).apply();buildMechanicalShell();showMechanicalProgram();}));
@@ -814,12 +773,82 @@ public final class MainActivity extends Activity {
         }
     }
 
+
+    private String printEscape(String value){
+        if(value==null||value.trim().isEmpty()) value="Pendiente";
+        return value.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;");
+    }
+
+    private void printPublicMeeting(Models.PublicMeeting week){
+        if(week==null){toast("Selecciona una reunión.");return;}
+        Models.MechanicalProgram mechanical=db.mechanicalProgram(week.date,"WEEKEND");
+        String dateLabel;
+        try{
+            dateLabel=LocalDate.parse(week.date).getDayOfWeek().getDisplayName(TextStyle.FULL,es)+", "+
+                    LocalDate.parse(week.date).getDayOfMonth()+" de "+
+                    LocalDate.parse(week.date).getMonth().getDisplayName(TextStyle.FULL,es)+" de "+
+                    LocalDate.parse(week.date).getYear();
+        }catch(Exception e){dateLabel=week.date;}
+        String hour=appState.getString("public_meeting_hour","12:00 p. m.");
+        StringBuilder rows=new StringBuilder();
+        rows.append("<tr><th>Hora de reunión:</th><td>").append(printEscape(hour)).append("</td></tr>");
+        rows.append("<tr><th>Presidente:</th><td>").append(printEscape(publicName(week.presidentId))).append("</td></tr>");
+        rows.append("<tr><th>Canción inicial:</th><td>").append(printEscape(mechanical==null?"Pendiente":mechanical.openingSong)).append("</td></tr>");
+        rows.append("<tr><th>Oración inicial:</th><td>").append(printEscape(mechanical==null?"Pendiente":publicName(mechanical.studentId(Models.MechanicalRole.ORACION_INICIAL)))).append("</td></tr>");
+        rows.append("<tr class='blue'><th colspan='2'>DISCURSO PÚBLICO</th></tr>");
+        rows.append("<tr><th>Orador:</th><td>").append(printEscape(speakerName(week))).append("</td></tr>");
+        rows.append("<tr><th>Número de bosquejo:</th><td>").append(printEscape(week.outlineNumber)).append("</td></tr>");
+        rows.append("<tr><th>Título del bosquejo:</th><td>").append(printEscape(week.outlineTitle)).append("</td></tr>");
+        rows.append("<tr><th>Canción intermedia:</th><td>").append(printEscape(mechanical==null?"Pendiente":mechanical.middleSong)).append("</td></tr>");
+        rows.append("<tr class='yellow'><th colspan='2'>ESTUDIO DE LA ATALAYA</th></tr>");
+        rows.append("<tr><th>Conductor:</th><td>").append(printEscape(publicName(week.conductorId))).append("</td></tr>");
+        rows.append("<tr><th>Tema:</th><td>").append(printEscape(week.watchtowerTopic)).append("</td></tr>");
+        rows.append("<tr><th>Lector:</th><td>").append(printEscape(week.visit?"No se programa durante la visita":publicName(week.readerId))).append("</td></tr>");
+        rows.append("<tr><th>Canción final:</th><td>").append(printEscape(mechanical==null?"Pendiente":mechanical.closingSong)).append("</td></tr>");
+        rows.append("<tr><th>Oración final:</th><td>").append(printEscape(mechanical==null?"Pendiente":publicName(mechanical.studentId(Models.MechanicalRole.ORACION_FINAL)))).append("</td></tr>");
+        appendMechanicalPrintRow(rows,mechanical,Models.MechanicalRole.ENTRADA,"ACOMODADOR DE ENTRADA");
+        appendMechanicalPrintRow(rows,mechanical,Models.MechanicalRole.AUDITORIO_1,"ACOMODADORES DE AUDITORIO");
+        appendMechanicalPrintRow(rows,mechanical,Models.MechanicalRole.MICROFONO_1,"MICRÓFONOS");
+        appendMechanicalPrintRow(rows,mechanical,Models.MechanicalRole.PLATAFORMA_1,"PLATAFORMA");
+        String document="<!doctype html><html><head><meta charset='utf-8'><style>"+
+                "@page{size:A4 portrait;margin:10mm}body{font-family:Arial,sans-serif;color:#444;font-size:12pt}"+
+                "h1{font-size:18pt;margin:0;padding:10px 12px;background:#00ad50;color:white}h2{font-size:15pt;margin:0;padding:8px 12px;background:#00ad50;color:white}"+
+                "table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{padding:7px 9px;text-align:left;vertical-align:middle}th{width:26%;background:#00ad50;color:white;font-weight:bold}td{background:#edf2f5}"+
+                ".blue th{background:#1670f5;color:white;font-size:15pt}.yellow th{background:#ffc400;color:#111;font-size:15pt}"+
+                ".cyan th{background:#10b4c9;color:white;font-size:14pt}.single td{padding:7px 9px}"+
+                "</style></head><body><h1>REUNIÓN PÚBLICA Y ESTUDIO DE LA ATALAYA</h1><h2>"+printEscape(dateLabel)+"</h2><table>"+rows+
+                "</table></body></html>";
+        WebView web=new WebView(this);
+        web.getSettings().setJavaScriptEnabled(false);
+        web.setWebViewClient(new WebViewClient(){
+            @Override public void onPageFinished(WebView view,String url){
+                try{
+                    PrintManager manager=(PrintManager)getSystemService(Context.PRINT_SERVICE);
+                    if(manager==null){toast("El servicio de impresión no está disponible.");return;}
+                    manager.print("Programa_"+week.date,view.createPrintDocumentAdapter("Programa_"+week.date),new android.print.PrintAttributes.Builder().setMediaSize(android.print.PrintAttributes.MediaSize.ISO_A4).setResolution(new android.print.PrintAttributes.Resolution("programa","Programa",300,300)).setMinMargins(android.print.PrintAttributes.Margins.NO_MARGINS).build());
+                }catch(Exception ex){toast("No se pudo preparar la impresión: "+ex.getMessage());}
+            }
+        });
+        web.loadDataWithBaseURL(null,document,"text/html","UTF-8",null);
+    }
+
+    private void appendMechanicalPrintRow(StringBuilder rows,Models.MechanicalProgram program,Models.MechanicalRole first,String heading){
+        rows.append("<tr class='cyan'><th colspan='2'>").append(printEscape(heading)).append("</th></tr>");
+        String text="Pendiente";
+        if(program!=null){
+            if(first==Models.MechanicalRole.ENTRADA) text=publicName(program.studentId(Models.MechanicalRole.ENTRADA));
+            else if(first==Models.MechanicalRole.AUDITORIO_1) text="1: "+publicName(program.studentId(Models.MechanicalRole.AUDITORIO_1))+"    2: "+publicName(program.studentId(Models.MechanicalRole.AUDITORIO_2));
+            else if(first==Models.MechanicalRole.MICROFONO_1) text="1: "+publicName(program.studentId(Models.MechanicalRole.MICROFONO_1))+"    2: "+publicName(program.studentId(Models.MechanicalRole.MICROFONO_2));
+            else if(first==Models.MechanicalRole.PLATAFORMA_1) text="1: "+publicName(program.studentId(Models.MechanicalRole.PLATAFORMA_1))+"    2: "+publicName(program.studentId(Models.MechanicalRole.PLATAFORMA_2));
+        }
+        rows.append("<tr class='single'><td colspan='2'>").append(printEscape(text)).append("</td></tr>");
+    }
+
     private void editPublicMeeting(Models.PublicMeeting existing){editPublicMeeting(existing,this::showPublicProgram);}
     private void editPublicMeeting(Models.PublicMeeting existing,Runnable afterSave){
         Models.PublicMeeting week=existing==null?new Models.PublicMeeting():existing;
         LinearLayout form=column();form.setPadding(dp(12),0,dp(12),dp(12));
-        DayOfWeek configuredDay=DayOfWeek.of(publicMeetingDay());
-        LocalDate suggested=YearMonth.parse(selectedMonth).atDay(1).with(TemporalAdjusters.nextOrSame(configuredDay));
+        LocalDate suggested=YearMonth.parse(selectedMonth).atDay(1).with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
         EditText date=dateInput(existing==null?suggested.toString():week.date);
         if(existing!=null)date.setEnabled(false);
         form.addView(label("Fecha de la reunión",14,true));form.addView(date);
