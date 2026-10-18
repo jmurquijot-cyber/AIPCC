@@ -62,6 +62,7 @@ public final class MainActivity extends Activity {
     private static final int REQUEST_IMPORT_EXCEL = 310;
     private static final int REQUEST_IMPORT_HISTORY = 311;
     private static final int REQUEST_IMPORT_LIFE_MINISTRY = 312;
+    private static final int REQUEST_IMPORT_MECHANICAL = 315;
     private static final int REQUEST_SUPPORT_RESTORE = 313;
     private static final int REQUEST_SUPPORT_SAVE = 314;
     private static final String EXCEL_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -650,6 +651,15 @@ public final class MainActivity extends Activity {
         }
         if(requestCode==REQUEST_SUPPORT_RESTORE){if(supportUser!=null&&resultCode==RESULT_OK&&data!=null&&data.getData()!=null)confirmSupportRestore(data.getData());return;}
         if(requestCode==REQUEST_IMPORT_HISTORY){if(resultCode==RESULT_OK&&data!=null&&data.getData()!=null)previewHistoricalImport(data.getData());return;}
+        if(requestCode==REQUEST_IMPORT_MECHANICAL){
+            if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
+            try(InputStream input=getContentResolver().openInputStream(data.getData())){
+                if(input==null)throw new IllegalArgumentException("No fue posible abrir el archivo seleccionado.");
+                MechanicalExcelImportManager.Result result=MechanicalExcelImportManager.importWorkbook(input,db);
+                safeDialog().setTitle(result.errors.isEmpty()?"Importación mecánica terminada":"Importación con observaciones").setMessage(result.summary()).setPositiveButton("Ver programa",(dialog,which)->showMechanicalProgram()).show();
+            }catch(Exception error){safeDialog().setTitle("No se pudo importar Asignaciones Mecánicas").setMessage(error.getMessage()==null?"Revise que sea un XLSX basado en la plantilla.":error.getMessage()).setPositiveButton("Aceptar",null).show();}
+            return;
+        }
         if(requestCode==REQUEST_IMPORT_LIFE_MINISTRY){if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;try(InputStream input=getContentResolver().openInputStream(data.getData())){if(input==null)throw new IllegalArgumentException("No fue posible abrir el archivo seleccionado.");LifeMinistryExcelImportManager.Result result=LifeMinistryExcelImportManager.importWorkbook(input,db);if(result.lastMonth!=null)selectedMonth=result.lastMonth;safeDialog().setTitle(result.errors.isEmpty()&&result.warnings.isEmpty()?"Programa importado":"Programa importado con observaciones").setMessage(result.summary()).setPositiveButton("Ver programa",(dialog,which)->showLifeMinistryProgram()).show();}catch(Exception error){safeDialog().setTitle("No se pudo importar Vida y Ministerio").setMessage(error.getMessage()==null?"Revise que sea un archivo XLSX basado en la plantilla separada.":error.getMessage()).setPositiveButton("Aceptar",null).show();}return;}
         if(requestCode!=REQUEST_IMPORT_EXCEL||resultCode!=RESULT_OK||data==null||data.getData()==null)return;
         try(InputStream input=getContentResolver().openInputStream(data.getData())){
@@ -934,7 +944,7 @@ public final class MainActivity extends Activity {
         month.setAllCaps(false);month.setCompoundDrawablesWithIntrinsicBounds(0,0,android.R.drawable.ic_menu_my_calendar,0);body.addView(month);
         body.addView(label("Registros independientes para la reunión de entre semana y Reunión Pública y Atalaya, incluso si coinciden en fecha. Solo participan varones autorizados.",13,false));
         if(showActiveWeekOnly){body.addView(label("Semana activa: "+activeWeek,14,true));body.addView(button("Ver mes completo",v->{showActiveWeekOnly=false;appState.edit().putBoolean("show_active_week_only",false).apply();showMechanicalProgram();}));}
-        LinearLayout actions=row();actions.addView(button("Registrar asignaciones mecánicas",v->newMechanicalProgram()));actions.addView(button("Configurar reunión entre semana",v->editMeeting()));actions.addView(button("Configurar reunión de fin de semana",v->editPublicMeeting(null,this::showMechanicalProgram)));HorizontalScrollView actionScroll=new HorizontalScrollView(this);actionScroll.addView(actions);body.addView(actionScroll);
+        LinearLayout actions=row();actions.addView(button("Registrar asignaciones mecánicas",v->newMechanicalProgram()));actions.addView(button("Importar Excel",v->openMechanicalImporter()));actions.addView(button("Plantilla Excel",v->shareMechanicalTemplate()));actions.addView(button("Configurar reunión entre semana",v->editMeeting()));actions.addView(button("Configurar reunión de fin de semana",v->editPublicMeeting(null,this::showMechanicalProgram)));HorizontalScrollView actionScroll=new HorizontalScrollView(this);actionScroll.addView(actions);body.addView(actionScroll);
         LinearLayout imageActions=row();imageActions.addView(button("Imagen del programa entre semana",v->selectCombinedWeeklyJpg()));imageActions.addView(button("Imagen del programa de fin de semana",v->selectPublicWeeklyJpg()));imageActions.addView(button("PDF mensual de asignaciones",v->selectMechanicalMonthlyPdf()));HorizontalScrollView imageScroll=new HorizontalScrollView(this);imageScroll.addView(imageActions);body.addView(imageScroll);
         List<Models.Meeting> weeks=db.meetings(selectedMonth);
         List<Models.PublicMeeting> weekend=db.publicMeetings(selectedMonth);
@@ -985,6 +995,19 @@ public final class MainActivity extends Activity {
                 (dialog,choice)->editMechanicalProgram(null,null,choice==0?"MIDWEEK":"WEEKEND")).setNegativeButton("Cancelar",null).show();
     }
 
+    private void openMechanicalImporter(){
+        Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(EXCEL_MIME);
+        intent.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{EXCEL_MIME,"application/vnd.ms-excel"});
+        try{startActivityForResult(intent,REQUEST_IMPORT_MECHANICAL);}catch(ActivityNotFoundException error){toast("No se encontró un selector de archivos.");}
+    }
+    private void shareMechanicalTemplate(){
+        File directory=new File(getCacheDir(),"reportes");if(!directory.exists()&&!directory.mkdirs()){toast("No fue posible preparar la plantilla.");return;}
+        File target=new File(directory,"Plantilla_Asignaciones_Mecanicas.xlsx");
+        try(InputStream input=getAssets().open("Plantilla_Asignaciones_Mecanicas.xlsx");FileOutputStream output=new FileOutputStream(target)){
+            byte[] buffer=new byte[8192];int read;while((read=input.read(buffer))!=-1)output.write(buffer,0,read);
+            shareFile(target,EXCEL_MIME,"Plantilla de Asignaciones Mecánicas",null);
+        }catch(Exception error){toast("No fue posible compartir la plantilla: "+error.getMessage());}
+    }
     private void selectMechanicalMonthlyPdf(){
         SharedPreferences report=getSharedPreferences("mechanical_monthly_report",MODE_PRIVATE);
         LinearLayout form=column();form.setPadding(dp(14),dp(6),dp(14),dp(8));
