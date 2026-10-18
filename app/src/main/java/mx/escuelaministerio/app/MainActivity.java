@@ -815,29 +815,62 @@ public final class MainActivity extends Activity {
         String html="<!doctype html><html><head><meta charset='utf-8'><style>body{font-family:Arial,sans-serif;color:#333;font-size:18px;margin:0;padding:18px;background:#fff}h1{font-size:26px;text-align:center;background:#00ad50;color:#fff;padding:16px;margin:0}h2{font-size:22px;text-align:center;background:#00ad50;color:#fff;padding:10px;margin:0 0 10px}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{padding:10px;border:1px solid #fff;text-align:left;overflow-wrap:anywhere}th{width:35%;background:#00ad50;color:white}td{background:#edf2f5}.blue th{background:#1670f5;color:white;font-size:21px}.yellow th{background:#ffc400;color:#111;font-size:21px}.cyan th{background:#10b4c9;color:white;font-size:19px}.single td{padding:10px}</style></head><body><h1>REUNIÓN PÚBLICA Y ESTUDIO DE LA ATALAYA</h1><h2>"+printEscape(dateLabel)+"</h2><table>"+rows+"</table></body></html>";
         WebView web=new WebView(this);
         web.setBackgroundColor(Color.WHITE);
+        web.getSettings().setJavaScriptEnabled(true);
         web.setWebViewClient(new WebViewClient(){
             @Override public void onPageFinished(WebView view,String url){
-                try{
-                    int width=1080;
-                    view.measure(View.MeasureSpec.makeMeasureSpec(width,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));
-                    int height=Math.max(1,view.getMeasuredHeight());
-                    if(height>12000)height=12000;
-                    view.layout(0,0,width,height);
-                    Bitmap bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);
-                    view.draw(new Canvas(bitmap));
-                    File directory=new File(getCacheDir(),"reportes");
-                    if(!directory.exists()&&!directory.mkdirs())throw new Exception("No se pudo crear la carpeta temporal.");
-                    File target=new File(directory,"Programa_"+week.date+".jpg");
-                    try(FileOutputStream output=new FileOutputStream(target)){bitmap.compress(Bitmap.CompressFormat.JPEG,92,output);}
-                    bitmap.recycle();
-                    shareFile(target,"image/jpeg","Programa de Reunión Pública y Atalaya · "+week.date,"com.whatsapp");
-                }catch(Exception ex){toast("No se pudo generar la imagen JPG: "+ex.getMessage());}
-                finally{view.destroy();}
+                // Esperar a que Chromium calcule el alto real del documento antes de dibujarlo.
+                view.evaluateJavascript(
+                    "Math.max(document.body ? document.body.scrollHeight : 0, document.documentElement ? document.documentElement.scrollHeight : 0)",
+                    new android.webkit.ValueCallback<String>(){
+                        @Override public void onReceiveValue(String value){
+                            try{
+                                int width=1080;
+                                int contentHeight=0;
+                                try{contentHeight=(int)Math.ceil(Double.parseDouble(value));}catch(Exception ignored){}
+                                if(contentHeight<200){
+                                    view.measure(View.MeasureSpec.makeMeasureSpec(width,View.MeasureSpec.EXACTLY),
+                                            View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));
+                                    contentHeight=view.getMeasuredHeight();
+                                }
+                                final int height=Math.min(12000,Math.max(600,contentHeight+32));
+                                view.measure(View.MeasureSpec.makeMeasureSpec(width,View.MeasureSpec.EXACTLY),
+                                        View.MeasureSpec.makeMeasureSpec(height,View.MeasureSpec.EXACTLY));
+                                view.layout(0,0,width,height);
+                                view.post(new Runnable(){
+                                    @Override public void run(){
+                                        Bitmap bitmap=null;
+                                        try{
+                                            bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);
+                                            Canvas canvas=new Canvas(bitmap);
+                                            canvas.drawColor(Color.WHITE);
+                                            view.draw(canvas);
+                                            File directory=new File(getCacheDir(),"reportes");
+                                            if(!directory.exists()&&!directory.mkdirs())throw new Exception("No se pudo crear la carpeta temporal.");
+                                            File target=new File(directory,"Programa_"+week.date+".jpg");
+                                            try(FileOutputStream output=new FileOutputStream(target)){
+                                                if(!bitmap.compress(Bitmap.CompressFormat.JPEG,94,output))
+                                                    throw new Exception("No se pudo codificar el JPG.");
+                                            }
+                                            if(target.length()<5000)throw new Exception("La imagen generada está vacía; inténtalo de nuevo.");
+                                            shareFile(target,"image/jpeg","Programa de Reunión Pública y Atalaya · "+week.date,"com.whatsapp");
+                                        }catch(Exception ex){
+                                            toast("No se pudo generar la imagen JPG: "+ex.getMessage());
+                                        }finally{
+                                            if(bitmap!=null&&!bitmap.isRecycled())bitmap.recycle();
+                                            view.destroy();
+                                        }
+                                    }
+                                });
+                            }catch(Exception ex){
+                                toast("No se pudo preparar el programa para JPG: "+ex.getMessage());
+                                view.destroy();
+                            }
+                        }
+                    });
             }
         });
-        web.loadDataWithBaseURL(null,html,"text/html","UTF-8",null);
+        web.loadDataWithBaseURL("https://aipcc.local/",html,"text/html","UTF-8",null);
     }
-
     private String printEscape(String value){
         if(value==null||value.trim().isEmpty()) value="Pendiente";
         return value.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;");
