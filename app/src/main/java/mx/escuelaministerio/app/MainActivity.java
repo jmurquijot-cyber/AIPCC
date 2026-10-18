@@ -242,7 +242,7 @@ public final class MainActivity extends Activity {
         HorizontalScrollView navScroll=new HorizontalScrollView(this);navScroll.setHorizontalScrollBarEnabled(false);
         LinearLayout nav=row();nav.setPadding(dp(5),dp(5),dp(5),dp(5));nav.setBackgroundColor(Color.WHITE);
         nav.addView(navButton("Inicio",v->showHome()));nav.addView(navButton("Programa",v->showPublicProgram()));
-        nav.addView(navButton("Oradores visitantes",v->showVisitingSpeakers()));nav.addView(navButton("Historial",v->showPublicHistory()));
+        nav.addView(navButton("Oradores visitantes",v->showVisitingSpeakers()));nav.addView(navButton("Config. reunión",v->showPublicScheduleSettings()));nav.addView(navButton("Historial",v->showPublicHistory()));
         nav.addView(navButton("Alumnos",v->showStudents()));nav.addView(navButton("Colores",v->showSettings()));
         navScroll.addView(nav);root.addView(navScroll,new LinearLayout.LayoutParams(-1,dp(55)));
         content=new FrameLayout(this);root.addView(content,new LinearLayout.LayoutParams(-1,0,1));setContentView(root);
@@ -730,12 +730,57 @@ public final class MainActivity extends Activity {
         return publicName(meeting.localSpeakerId);
     }
 
+    private SharedPreferences publicSchedulePrefs(){
+        return getSharedPreferences("public_meeting_schedule",MODE_PRIVATE);
+    }
+
+    private int publicMeetingDay(){
+        return publicSchedulePrefs().getInt("day_of_week",DayOfWeek.SUNDAY.getValue());
+    }
+
+    private String publicMeetingTime(){
+        return publicSchedulePrefs().getString("meeting_time","");
+    }
+
+    private void showPublicScheduleSettings(){
+        ScrollView page=page("Configuración anual de la reunión");
+        LinearLayout body=body(page);
+        body.addView(label("Estos datos pueden cambiar cada año y se usan como referencia al preparar el programa.",14,false));
+        int currentYear=java.time.Year.now().getValue();
+        EditText year=input("Año",String.valueOf(publicSchedulePrefs().getInt("year",currentYear)));
+        year.setInputType(InputType.TYPE_CLASS_NUMBER);
+        body.addView(label("Año del programa",14,true));body.addView(year);
+        String[] dayLabels={"Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"};
+        Spinner day=spinner(Arrays.asList(dayLabels));
+        day.setSelection(Math.max(0,Math.min(6,publicMeetingDay()-1)));
+        body.addView(label("Día habitual de la reunión",14,true));body.addView(day);
+        EditText time=input("Hora (ej. 10:00 a. m.)",publicMeetingTime());
+        body.addView(label("Hora de inicio",14,true));body.addView(time);
+        body.addView(button("Guardar configuración anual",v->{
+            try{
+                String yearText=value(year).trim();
+                int yearValue=Integer.parseInt(yearText);
+                if(yearValue<2000||yearValue>2200)throw new IllegalArgumentException("Escriba un año válido.");
+                String timeText=value(time).trim();
+                if(!timeText.isEmpty()&&!timeText.matches("(?i)^(0?[1-9]|1[0-2]):[0-5][0-9]\\s*(a\\.?\\s*m\\.?|p\\.?\\s*m\\.?)$")&&!timeText.matches("^(0?[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$"))
+                    throw new IllegalArgumentException("Use una hora como 10:00 a. m. o 14:00.");
+                int dayValue=day.getSelectedItemPosition()+1;
+                publicSchedulePrefs().edit().putInt("year",yearValue).putInt("day_of_week",dayValue).putString("meeting_time",timeText).apply();
+                selectedMonth=String.format(Locale.US,"%04d-01",yearValue);
+                toast("Configuración anual guardada.");showPublicProgram();
+            }catch(Exception e){toast("No se pudo guardar: "+e.getMessage());}
+        }));
+        body.addView(button("Volver al programa",v->showPublicProgram()));
+    }
+
     private void showPublicProgram(){
         ScrollView page=page("Reunión Pública y Atalaya");LinearLayout body=body(page);
         body.addView(label("Mes del programa",14,true));
         Button month=button(selectedMonthLabel(),v->openMonthPicker(this::showPublicProgram));
         month.setAllCaps(false);month.setCompoundDrawablesWithIntrinsicBounds(0,0,android.R.drawable.ic_menu_my_calendar,0);body.addView(month);
-        body.addView(label("La reunión se programa normalmente el domingo, pero puede elegirse otra fecha. Los participantes se toman del catálogo común de alumnos.",13,false));
+        body.addView(label("Día habitual: "+DayOfWeek.of(publicMeetingDay()).getDisplayName(TextStyle.FULL,new Locale("es","MX"))+
+                (publicMeetingTime().trim().isEmpty()?"":" · Hora: "+publicMeetingTime())+
+                ". Los participantes se toman del catálogo común de alumnos.",13,false));
         body.addView(button("+ Configurar nueva reunión",v->editPublicMeeting(null)));
         List<Models.PublicMeeting> weeks=db.publicMeetings(selectedMonth);
         if(weeks.isEmpty())body.addView(label("No hay reuniones del fin de semana registradas para este mes.",15,false));
@@ -773,7 +818,8 @@ public final class MainActivity extends Activity {
     private void editPublicMeeting(Models.PublicMeeting existing,Runnable afterSave){
         Models.PublicMeeting week=existing==null?new Models.PublicMeeting():existing;
         LinearLayout form=column();form.setPadding(dp(12),0,dp(12),dp(12));
-        LocalDate suggested=YearMonth.parse(selectedMonth).atDay(1).with(TemporalAdjusters.nextOrSame(DayOfWeek.SUNDAY));
+        DayOfWeek configuredDay=DayOfWeek.of(publicMeetingDay());
+        LocalDate suggested=YearMonth.parse(selectedMonth).atDay(1).with(TemporalAdjusters.nextOrSame(configuredDay));
         EditText date=dateInput(existing==null?suggested.toString():week.date);
         if(existing!=null)date.setEnabled(false);
         form.addView(label("Fecha de la reunión",14,true));form.addView(date);
