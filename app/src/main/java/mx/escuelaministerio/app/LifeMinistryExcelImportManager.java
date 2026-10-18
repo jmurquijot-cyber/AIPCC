@@ -66,7 +66,7 @@ final class LifeMinistryExcelImportManager {
             String key=normalize(header.getKey());
             for(String alias:aliases){
                 String candidate=normalize(alias);
-                if(key.equals(candidate) || (candidate.length()>3 && key.contains(candidate))){
+                if(key.equals(candidate) || (candidate.length()>7 && key.contains(candidate)) || (candidate.length()<=7 && key.startsWith(candidate))){
                     String value=row.cells.getOrDefault(header.getValue(),"").trim();
                     if(!value.isEmpty()) return value;
                 }
