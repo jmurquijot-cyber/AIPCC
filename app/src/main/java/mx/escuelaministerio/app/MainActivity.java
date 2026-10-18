@@ -12,6 +12,8 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.Typeface;
 import android.net.Uri;
@@ -761,6 +763,8 @@ public final class MainActivity extends Activity {
             LinearLayout actions=row();
             actions.addView(button("Editar",v->editPublicMeeting(week)));
             actions.addView(button("Imprimir programa",v->printPublicMeeting(week)));
+            actions.addView(button("Compartir JPG",v->sharePublicMeetingJpg(week)));
+            actions.addView(button("Plantilla Excel",v->sharePublicMeetingTemplate()));
             if(!week.suspended){
                 actions.addView(button("Evaluar orador",v->editPublicEvaluation(week)));
                 actions.addView(button("Mecánicas",v->{selectedMonth=week.date.substring(0,7);activeWeek=week.date;showActiveWeekOnly=true;appState.edit().putString("active_week",activeWeek).putBoolean("show_active_week_only",true).apply();buildMechanicalShell();showMechanicalProgram();}));
@@ -773,6 +777,66 @@ public final class MainActivity extends Activity {
         }
     }
 
+
+
+    private void sharePublicMeetingTemplate(){
+        File directory=new File(getCacheDir(),"reportes");
+        if(!directory.exists()&&!directory.mkdirs()){toast("No fue posible preparar la plantilla.");return;}
+        File target=new File(directory,"Plantilla_Reunion_Publica_Atalaya.xlsx");
+        try(InputStream input=getAssets().open("Plantilla_Reunion_Publica_Atalaya.xlsx");FileOutputStream output=new FileOutputStream(target)){
+            byte[] buffer=new byte[8192];int read;while((read=input.read(buffer))!=-1)output.write(buffer,0,read);
+            shareFile(target,EXCEL_MIME,"Plantilla de Reunión Pública y Atalaya (sin asignaciones mecánicas)",null);
+        }catch(Exception error){toast("No fue posible compartir la plantilla: "+error.getMessage());}
+    }
+
+    private void sharePublicMeetingJpg(Models.PublicMeeting week){
+        if(week==null){toast("Selecciona una reunión.");return;}
+        Models.MechanicalProgram mechanical=db.mechanicalProgram(week.date,"WEEKEND");
+        String dateLabel;
+        try{dateLabel=LocalDate.parse(week.date).getDayOfWeek().getDisplayName(TextStyle.FULL,es)+", "+
+                LocalDate.parse(week.date).getDayOfMonth()+" de "+LocalDate.parse(week.date).getMonth().getDisplayName(TextStyle.FULL,es)+
+                " de "+LocalDate.parse(week.date).getYear();}catch(Exception e){dateLabel=week.date;}
+        String hour=appState.getString("public_meeting_hour","12:00 p. m.");
+        StringBuilder rows=new StringBuilder();
+        rows.append("<tr><th>Hora:</th><td>").append(printEscape(hour)).append("</td></tr>");
+        rows.append("<tr><th>Presidente:</th><td>").append(printEscape(publicName(week.presidentId))).append("</td></tr>");
+        rows.append("<tr class='blue'><th colspan='2'>DISCURSO PÚBLICO</th></tr>");
+        rows.append("<tr><th>Orador:</th><td>").append(printEscape(speakerName(week))).append("</td></tr>");
+        rows.append("<tr><th>Bosquejo:</th><td>").append(printEscape(week.outlineNumber+" · "+week.outlineTitle)).append("</td></tr>");
+        rows.append("<tr class='yellow'><th colspan='2'>ESTUDIO DE LA ATALAYA</th></tr>");
+        rows.append("<tr><th>Conductor:</th><td>").append(printEscape(publicName(week.conductorId))).append("</td></tr>");
+        rows.append("<tr><th>Tema:</th><td>").append(printEscape(week.watchtowerTopic)).append("</td></tr>");
+        rows.append("<tr><th>Lector:</th><td>").append(printEscape(week.visit?"No se programa durante la visita":publicName(week.readerId))).append("</td></tr>");
+        rows.append("<tr><th>Cánticos:</th><td>").append(printEscape(mechanical==null?"Pendiente":mechanical.openingSong+" · "+mechanical.middleSong+" · "+mechanical.closingSong)).append("</td></tr>");
+        appendMechanicalPrintRow(rows,mechanical,Models.MechanicalRole.ENTRADA,"ACOMODADOR DE ENTRADA");
+        appendMechanicalPrintRow(rows,mechanical,Models.MechanicalRole.AUDITORIO_1,"ACOMODADORES DE AUDITORIO");
+        appendMechanicalPrintRow(rows,mechanical,Models.MechanicalRole.MICROFONO_1,"MICRÓFONOS");
+        appendMechanicalPrintRow(rows,mechanical,Models.MechanicalRole.PLATAFORMA_1,"PLATAFORMA");
+        String html="<!doctype html><html><head><meta charset='utf-8'><style>body{font-family:Arial,sans-serif;color:#333;font-size:18px;margin:0;padding:18px;background:#fff}h1{font-size:26px;text-align:center;background:#00ad50;color:#fff;padding:16px;margin:0}h2{font-size:22px;text-align:center;background:#00ad50;color:#fff;padding:10px;margin:0 0 10px}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{padding:10px;border:1px solid #fff;text-align:left;overflow-wrap:anywhere}th{width:35%;background:#00ad50;color:white}td{background:#edf2f5}.blue th{background:#1670f5;color:white;font-size:21px}.yellow th{background:#ffc400;color:#111;font-size:21px}.cyan th{background:#10b4c9;color:white;font-size:19px}.single td{padding:10px}</style></head><body><h1>REUNIÓN PÚBLICA Y ESTUDIO DE LA ATALAYA</h1><h2>"+printEscape(dateLabel)+"</h2><table>"+rows+"</table></body></html>";
+        WebView web=new WebView(this);
+        web.setBackgroundColor(Color.WHITE);
+        web.setWebViewClient(new WebViewClient(){
+            @Override public void onPageFinished(WebView view,String url){
+                try{
+                    int width=1080;
+                    view.measure(View.MeasureSpec.makeMeasureSpec(width,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));
+                    int height=Math.max(1,view.getMeasuredHeight());
+                    if(height>12000)height=12000;
+                    view.layout(0,0,width,height);
+                    Bitmap bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);
+                    view.draw(new Canvas(bitmap));
+                    File directory=new File(getCacheDir(),"reportes");
+                    if(!directory.exists()&&!directory.mkdirs())throw new Exception("No se pudo crear la carpeta temporal.");
+                    File target=new File(directory,"Programa_"+week.date+".jpg");
+                    try(FileOutputStream output=new FileOutputStream(target)){bitmap.compress(Bitmap.CompressFormat.JPEG,92,output);}
+                    bitmap.recycle();
+                    shareFile(target,"image/jpeg","Programa de Reunión Pública y Atalaya · "+week.date,"com.whatsapp");
+                }catch(Exception ex){toast("No se pudo generar la imagen JPG: "+ex.getMessage());}
+                finally{view.destroy();}
+            }
+        });
+        web.loadDataWithBaseURL(null,html,"text/html","UTF-8",null);
+    }
 
     private String printEscape(String value){
         if(value==null||value.trim().isEmpty()) value="Pendiente";
