@@ -791,86 +791,144 @@ public final class MainActivity extends Activity {
 
     private void sharePublicMeetingJpg(Models.PublicMeeting week){
         if(week==null){toast("Selecciona una reunión.");return;}
-        Models.MechanicalProgram mechanical=db.mechanicalProgram(week.date,"WEEKEND");
-        String dateLabel;
-        try{dateLabel=LocalDate.parse(week.date).getDayOfWeek().getDisplayName(TextStyle.FULL,es)+", "+
-                LocalDate.parse(week.date).getDayOfMonth()+" de "+LocalDate.parse(week.date).getMonth().getDisplayName(TextStyle.FULL,es)+
-                " de "+LocalDate.parse(week.date).getYear();}catch(Exception e){dateLabel=week.date;}
-        String hour=appState.getString("public_meeting_hour","12:00 p. m.");
-        StringBuilder rows=new StringBuilder();
-        rows.append("<tr><th>Hora:</th><td>").append(printEscape(hour)).append("</td></tr>");
-        rows.append("<tr><th>Presidente:</th><td>").append(printEscape(publicName(week.presidentId))).append("</td></tr>");
-        rows.append("<tr class='blue'><th colspan='2'>DISCURSO PÚBLICO</th></tr>");
-        rows.append("<tr><th>Orador:</th><td>").append(printEscape(speakerName(week))).append("</td></tr>");
-        rows.append("<tr><th>Bosquejo:</th><td>").append(printEscape(week.outlineNumber+" · "+week.outlineTitle)).append("</td></tr>");
-        rows.append("<tr class='yellow'><th colspan='2'>ESTUDIO DE LA ATALAYA</th></tr>");
-        rows.append("<tr><th>Conductor:</th><td>").append(printEscape(publicName(week.conductorId))).append("</td></tr>");
-        rows.append("<tr><th>Tema:</th><td>").append(printEscape(week.watchtowerTopic)).append("</td></tr>");
-        rows.append("<tr><th>Lector:</th><td>").append(printEscape(week.visit?"No se programa durante la visita":publicName(week.readerId))).append("</td></tr>");
-        rows.append("<tr><th>Cánticos:</th><td>").append(printEscape(mechanical==null?"Pendiente":mechanical.openingSong+" · "+mechanical.middleSong+" · "+mechanical.closingSong)).append("</td></tr>");
-        appendMechanicalPrintRow(rows,mechanical,Models.MechanicalRole.ENTRADA,"ACOMODADOR DE ENTRADA");
-        appendMechanicalPrintRow(rows,mechanical,Models.MechanicalRole.AUDITORIO_1,"ACOMODADORES DE AUDITORIO");
-        appendMechanicalPrintRow(rows,mechanical,Models.MechanicalRole.MICROFONO_1,"MICRÓFONOS");
-        appendMechanicalPrintRow(rows,mechanical,Models.MechanicalRole.PLATAFORMA_1,"PLATAFORMA");
-        String html="<!doctype html><html><head><meta charset='utf-8'><style>body{font-family:Arial,sans-serif;color:#333;font-size:18px;margin:0;padding:18px;background:#fff}h1{font-size:26px;text-align:center;background:#00ad50;color:#fff;padding:16px;margin:0}h2{font-size:22px;text-align:center;background:#00ad50;color:#fff;padding:10px;margin:0 0 10px}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{padding:10px;border:1px solid #fff;text-align:left;overflow-wrap:anywhere}th{width:35%;background:#00ad50;color:white}td{background:#edf2f5}.blue th{background:#1670f5;color:white;font-size:21px}.yellow th{background:#ffc400;color:#111;font-size:21px}.cyan th{background:#10b4c9;color:white;font-size:19px}.single td{padding:10px}</style></head><body><h1>REUNIÓN PÚBLICA Y ESTUDIO DE LA ATALAYA</h1><h2>"+printEscape(dateLabel)+"</h2><table>"+rows+"</table></body></html>";
-        WebView web=new WebView(this);
-        web.setBackgroundColor(Color.WHITE);
-        web.getSettings().setJavaScriptEnabled(true);
-        web.setWebViewClient(new WebViewClient(){
-            @Override public void onPageFinished(WebView view,String url){
-                // Esperar a que Chromium calcule el alto real del documento antes de dibujarlo.
-                view.evaluateJavascript(
-                    "Math.max(document.body ? document.body.scrollHeight : 0, document.documentElement ? document.documentElement.scrollHeight : 0)",
-                    new android.webkit.ValueCallback<String>(){
-                        @Override public void onReceiveValue(String value){
-                            try{
-                                int width=1080;
-                                int contentHeight=0;
-                                try{contentHeight=(int)Math.ceil(Double.parseDouble(value));}catch(Exception ignored){}
-                                if(contentHeight<200){
-                                    view.measure(View.MeasureSpec.makeMeasureSpec(width,View.MeasureSpec.EXACTLY),
-                                            View.MeasureSpec.makeMeasureSpec(0,View.MeasureSpec.UNSPECIFIED));
-                                    contentHeight=view.getMeasuredHeight();
-                                }
-                                final int height=Math.min(12000,Math.max(600,contentHeight+32));
-                                view.measure(View.MeasureSpec.makeMeasureSpec(width,View.MeasureSpec.EXACTLY),
-                                        View.MeasureSpec.makeMeasureSpec(height,View.MeasureSpec.EXACTLY));
-                                view.layout(0,0,width,height);
-                                view.post(new Runnable(){
-                                    @Override public void run(){
-                                        Bitmap bitmap=null;
-                                        try{
-                                            bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);
-                                            Canvas canvas=new Canvas(bitmap);
-                                            canvas.drawColor(Color.WHITE);
-                                            view.draw(canvas);
-                                            File directory=new File(getCacheDir(),"reportes");
-                                            if(!directory.exists()&&!directory.mkdirs())throw new Exception("No se pudo crear la carpeta temporal.");
-                                            File target=new File(directory,"Programa_"+week.date+".jpg");
-                                            try(FileOutputStream output=new FileOutputStream(target)){
-                                                if(!bitmap.compress(Bitmap.CompressFormat.JPEG,94,output))
-                                                    throw new Exception("No se pudo codificar el JPG.");
-                                            }
-                                            if(target.length()<5000)throw new Exception("La imagen generada está vacía; inténtalo de nuevo.");
-                                            shareFile(target,"image/jpeg","Programa de Reunión Pública y Atalaya · "+week.date,"com.whatsapp");
-                                        }catch(Exception ex){
-                                            toast("No se pudo generar la imagen JPG: "+ex.getMessage());
-                                        }finally{
-                                            if(bitmap!=null&&!bitmap.isRecycled())bitmap.recycle();
-                                            view.destroy();
-                                        }
-                                    }
-                                });
-                            }catch(Exception ex){
-                                toast("No se pudo preparar el programa para JPG: "+ex.getMessage());
-                                view.destroy();
-                            }
-                        }
-                    });
+        try{
+            Models.MechanicalProgram mechanical=db.mechanicalProgram(week.date,"WEEKEND");
+            LocalDate meetingDate=LocalDate.parse(week.date);
+            String dateLabel=meetingDate.getDayOfWeek().getDisplayName(TextStyle.FULL,es)+", "+
+                    meetingDate.getDayOfMonth()+" de "+meetingDate.getMonth().getDisplayName(TextStyle.FULL,es)+
+                    " de "+meetingDate.getYear();
+            String hour=appState.getString("public_meeting_hour","12:00 p. m.");
+            List<String[]> lines=new ArrayList<>();
+            lines.add(new String[]{"Hora",hour,"green"});
+            lines.add(new String[]{"Presidente",publicName(week.presidentId),"green"});
+            lines.add(new String[]{"DISCURSO PÚBLICO","","blue"});
+            lines.add(new String[]{"Orador",speakerName(week),"green"});
+            lines.add(new String[]{"Bosquejo",week.outlineNumber+" · "+week.outlineTitle,"green"});
+            lines.add(new String[]{"ESTUDIO DE LA ATALAYA","","yellow"});
+            lines.add(new String[]{"Conductor",publicName(week.conductorId),"green"});
+            lines.add(new String[]{"Tema",week.watchtowerTopic,"green"});
+            lines.add(new String[]{"Lector",week.visit?"No se programa durante la visita":publicName(week.readerId),"green"});
+            lines.add(new String[]{"Cánticos",mechanical==null?"Pendiente":mechanical.openingSong+" · "+mechanical.middleSong+" · "+mechanical.closingSong,"green"});
+            addJpgMechanicalLine(lines,mechanical,Models.MechanicalRole.ENTRADA,"ACOMODADOR DE ENTRADA");
+            addJpgMechanicalLine(lines,mechanical,Models.MechanicalRole.AUDITORIO_1,"ACOMODADORES DE AUDITORIO");
+            addJpgMechanicalLine(lines,mechanical,Models.MechanicalRole.MICROFONO_1,"MICRÓFONOS");
+            addJpgMechanicalLine(lines,mechanical,Models.MechanicalRole.PLATAFORMA_1,"PLATAFORMA");
+
+            final int width=1080, margin=42, contentWidth=width-margin*2;
+            android.graphics.Paint paint=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            paint.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL));
+            paint.setTextSize(30);
+            int estimatedHeight=300;
+            for(String[] line:lines){
+                if(line[1].isEmpty()){estimatedHeight+=76;continue;}
+                paint.setTextSize(25);
+                int labelLines=Math.max(1,(int)Math.ceil(paint.measureText(line[0])/(contentWidth*0.34f)));
+                int valueLines=Math.max(1,(int)Math.ceil(paint.measureText(line[1])/(contentWidth*0.60f)));
+                estimatedHeight+=Math.max(labelLines,valueLines)*42+28;
             }
-        });
-        web.loadDataWithBaseURL("https://aipcc.local/",html,"text/html","UTF-8",null);
+            int bitmapHeight=Math.min(6000,Math.max(900,estimatedHeight+80));
+            Bitmap full=Bitmap.createBitmap(width,bitmapHeight,Bitmap.Config.ARGB_8888);
+            Canvas canvas=new Canvas(full);
+            canvas.drawColor(Color.WHITE);
+            paint.setTypeface(Typeface.create("sans-serif",Typeface.BOLD));
+            paint.setTextAlign(android.graphics.Paint.Align.CENTER);
+            paint.setTextSize(34);
+            paint.setColor(Color.WHITE);
+            canvas.drawRect(0,0,width,100,paint);
+            paint.setColor(Color.rgb(0,173,80));
+            canvas.drawRect(0,0,width,100,paint);
+            paint.setColor(Color.WHITE);
+            canvas.drawText("REUNIÓN PÚBLICA Y ATALAYA",width/2f,62,paint);
+            paint.setTextSize(25);
+            canvas.drawText(dateLabel,width/2f,142,paint);
+            int y=174;
+            for(String[] line:lines){
+                if(line[1].isEmpty()){
+                    int color="blue".equals(line[2])?Color.rgb(22,112,245):Color.rgb(255,196,0);
+                    paint.setColor(color);
+                    canvas.drawRect(margin,y,width-margin,y+58,paint);
+                    paint.setTypeface(Typeface.create("sans-serif",Typeface.BOLD));
+                    paint.setTextSize(27);
+                    paint.setTextAlign(android.graphics.Paint.Align.CENTER);
+                    paint.setColor("yellow".equals(line[2])?Color.BLACK:Color.WHITE);
+                    canvas.drawText(line[0],width/2f,y+38,paint);
+                    y+=70;
+                    continue;
+                }
+                int rowTop=y;
+                int leftWidth=(int)(contentWidth*0.36f);
+                int rightX=margin+leftWidth;
+                paint.setTextSize(23);
+                paint.setTypeface(Typeface.create("sans-serif",Typeface.BOLD));
+                List<String> labelLines=wrapJpgText(line[0],paint,leftWidth-28);
+                paint.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL));
+                List<String> valueLines=wrapJpgText(emptyJpgValue(line[1]),paint,contentWidth-leftWidth-28);
+                int textLines=Math.max(labelLines.size(),valueLines.size());
+                int rowHeight=Math.max(62,textLines*31+26);
+                paint.setColor(Color.rgb(0,173,80));
+                canvas.drawRect(margin,rowTop, rightX,rowTop+rowHeight,paint);
+                paint.setColor(Color.rgb(237,242,245));
+                canvas.drawRect(rightX,rowTop,width-margin,rowTop+rowHeight,paint);
+                paint.setColor(Color.WHITE);
+                paint.setTypeface(Typeface.create("sans-serif",Typeface.BOLD));
+                paint.setTextAlign(android.graphics.Paint.Align.LEFT);
+                int ty=rowTop+36;
+                for(String t:labelLines){canvas.drawText(t,margin+14,ty,paint);ty+=31;}
+                paint.setColor(Color.rgb(45,45,45));
+                paint.setTypeface(Typeface.create("sans-serif",Typeface.NORMAL));
+                ty=rowTop+36;
+                for(String t:valueLines){canvas.drawText(t,rightX+14,ty,paint);ty+=31;}
+                y+=rowHeight+3;
+            }
+            int finalHeight=Math.min(bitmapHeight,Math.max(1,y+30));
+            Bitmap bitmap=Bitmap.createBitmap(full,0,0,width,finalHeight);
+            full.recycle();
+            File directory=new File(getCacheDir(),"reportes");
+            if(!directory.exists()&&!directory.mkdirs())throw new Exception("No se pudo crear la carpeta temporal.");
+            File target=new File(directory,"Programa_"+week.date+".jpg");
+            try(FileOutputStream output=new FileOutputStream(target)){
+                if(!bitmap.compress(Bitmap.CompressFormat.JPEG,94,output))throw new Exception("No se pudo guardar la imagen JPG.");
+                output.flush();
+            }finally{bitmap.recycle();}
+            if(!target.isFile()||target.length()<1000)throw new Exception("La imagen no se generó correctamente.");
+            shareFile(target,"image/jpeg","Programa de Reunión Pública y Atalaya · "+week.date,"com.whatsapp");
+        }catch(Exception ex){
+            toast("No se pudo generar/compartir el JPG: "+(ex.getMessage()==null?"error inesperado":ex.getMessage()));
+        }
     }
+
+    private void addJpgMechanicalLine(List<String[]> lines,Models.MechanicalProgram mechanical,Models.MechanicalRole role,String label){
+        String value="Pendiente";
+        if(mechanical!=null){
+            try{
+                long id=mechanical.studentId(role);
+                if(id>0){Models.Student student=db.student(id);if(student!=null)value=student.name;}
+            }catch(Exception ignored){}
+        }
+        lines.add(new String[]{label,value,"green"});
+    }
+
+    private String emptyJpgValue(String value){
+        return value==null||value.trim().isEmpty()?"Pendiente":value.trim();
+    }
+
+    private List<String> wrapJpgText(String value,android.graphics.Paint paint,float maxWidth){
+        List<String> result=new ArrayList<>();
+        String remaining=emptyJpgValue(value);
+        while(!remaining.isEmpty()){
+            int count=paint.breakText(remaining,true,maxWidth,null);
+            if(count<=0)count=1;
+            if(count<remaining.length()){
+                int space=remaining.lastIndexOf(' ',count);
+                if(space>0)count=space;
+            }
+            result.add(remaining.substring(0,count).trim());
+            remaining=remaining.substring(count).trim();
+        }
+        if(result.isEmpty())result.add("Pendiente");
+        return result;
+    }
+
     private String printEscape(String value){
         if(value==null||value.trim().isEmpty()) value="Pendiente";
         return value.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;");
