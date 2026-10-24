@@ -799,20 +799,25 @@ public final class MainActivity extends Activity {
                     " de "+meetingDate.getYear();
             String hour=appState.getString("public_meeting_hour","12:00 p. m.");
             List<String[]> lines=new ArrayList<>();
+            lines.add(new String[]{"Fecha",dateLabel,"green"});
             lines.add(new String[]{"Hora",hour,"green"});
             lines.add(new String[]{"Presidente",publicName(week.presidentId),"green"});
             lines.add(new String[]{"DISCURSO PÚBLICO","","blue"});
+            lines.add(new String[]{"Canción inicial",mechanical==null?"Pendiente":mechanical.openingSong,"green"});
+            addJpgMechanicalLine(lines,mechanical,Models.MechanicalRole.ORACION_INICIAL,"Oración inicial");
             lines.add(new String[]{"Orador",speakerName(week),"green"});
-            lines.add(new String[]{"Bosquejo",week.outlineNumber+" · "+week.outlineTitle,"green"});
+            lines.add(new String[]{"Discurso",week.outlineNumber+" · "+week.outlineTitle,"green"});
             lines.add(new String[]{"ESTUDIO DE LA ATALAYA","","yellow"});
+            lines.add(new String[]{"Canción intermedia",mechanical==null?"Pendiente":mechanical.middleSong,"green"});
             lines.add(new String[]{"Conductor",publicName(week.conductorId),"green"});
-            lines.add(new String[]{"Tema",week.watchtowerTopic,"green"});
             lines.add(new String[]{"Lector",week.visit?"No se programa durante la visita":publicName(week.readerId),"green"});
-            lines.add(new String[]{"Cánticos",mechanical==null?"Pendiente":mechanical.openingSong+" · "+mechanical.middleSong+" · "+mechanical.closingSong,"green"});
-            addJpgMechanicalLine(lines,mechanical,Models.MechanicalRole.ENTRADA,"ACOMODADOR DE ENTRADA");
-            addJpgMechanicalLine(lines,mechanical,Models.MechanicalRole.AUDITORIO_1,"ACOMODADORES DE AUDITORIO");
-            addJpgMechanicalLine(lines,mechanical,Models.MechanicalRole.MICROFONO_1,"MICRÓFONOS");
-            addJpgMechanicalLine(lines,mechanical,Models.MechanicalRole.PLATAFORMA_1,"PLATAFORMA");
+            lines.add(new String[]{"Canción final",mechanical==null?"Pendiente":mechanical.closingSong,"green"});
+            addJpgMechanicalLine(lines,mechanical,Models.MechanicalRole.ORACION_FINAL,"Oración final");
+            lines.add(new String[]{"TAREAS MECÁNICAS","","cyan"});
+            addJpgMechanicalLine(lines,mechanical,Models.MechanicalRole.ENTRADA,"Acomodador de entrada");
+            addJpgMechanicalPairLine(lines,mechanical,Models.MechanicalRole.AUDITORIO_1,Models.MechanicalRole.AUDITORIO_2,"Acomodadores de auditorio");
+            addJpgMechanicalPairLine(lines,mechanical,Models.MechanicalRole.MICROFONO_1,Models.MechanicalRole.MICROFONO_2,"Micrófonos");
+            addJpgMechanicalPairLine(lines,mechanical,Models.MechanicalRole.PLATAFORMA_1,Models.MechanicalRole.PLATAFORMA_2,"Plataforma");
 
             final int width=1080, margin=42, contentWidth=width-margin*2;
             android.graphics.Paint paint=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
@@ -839,12 +844,10 @@ public final class MainActivity extends Activity {
             canvas.drawRect(0,0,width,100,paint);
             paint.setColor(Color.WHITE);
             canvas.drawText("REUNIÓN PÚBLICA Y ATALAYA",width/2f,62,paint);
-            paint.setTextSize(25);
-            canvas.drawText(dateLabel,width/2f,142,paint);
-            int y=174;
+            int y=120;
             for(String[] line:lines){
                 if(line[1].isEmpty()){
-                    int color="blue".equals(line[2])?Color.rgb(22,112,245):Color.rgb(255,196,0);
+                    int color="blue".equals(line[2])?Color.rgb(22,112,245):("cyan".equals(line[2])?Color.rgb(0,177,200):Color.rgb(255,196,0));
                     paint.setColor(color);
                     canvas.drawRect(margin,y,width-margin,y+58,paint);
                     paint.setTypeface(Typeface.create("sans-serif",Typeface.BOLD));
@@ -895,6 +898,21 @@ public final class MainActivity extends Activity {
         }catch(Exception ex){
             toast("No se pudo generar/compartir el JPG: "+(ex.getMessage()==null?"error inesperado":ex.getMessage()));
         }
+    }
+
+    private void addJpgMechanicalPairLine(List<String[]> lines,Models.MechanicalProgram mechanical,Models.MechanicalRole first,Models.MechanicalRole second,String label){
+        String one=mechanicalStudentName(mechanical,first);
+        String two=mechanicalStudentName(mechanical,second);
+        lines.add(new String[]{label,one+"  |  "+two,"green"});
+    }
+
+    private String mechanicalStudentName(Models.MechanicalProgram mechanical,Models.MechanicalRole role){
+        if(mechanical==null)return "Pendiente";
+        try{
+            long id=mechanical.studentId(role);
+            if(id>0){Models.Student student=db.student(id);if(student!=null)return student.name;}
+        }catch(Exception ignored){}
+        return "Pendiente";
     }
 
     private void addJpgMechanicalLine(List<String[]> lines,Models.MechanicalProgram mechanical,Models.MechanicalRole role,String label){
