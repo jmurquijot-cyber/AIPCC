@@ -15,8 +15,8 @@ android {
         applicationId = "org.aipcc.congregacion"
         minSdk = 26
         targetSdk = 36
-        versionCode = 36
-        versionName = "1.8.5"
+        versionCode = 38
+        versionName = "1.8.7"
     }
 
     signingConfigs {
