@@ -810,13 +810,12 @@ public final class MainActivity extends Activity {
             lines.add(new String[]{"ESTUDIO DE LA ATALAYA","","yellow"});
             lines.add(new String[]{"Canción intermedia",mechanical==null?"Pendiente":mechanical.middleSong,"green"});
             lines.add(new String[]{"Conductor",publicName(week.conductorId),"green"});
-            if(week.visit) lines.add(new String[]{"Participación","Preguntas y Respuestas","green"});
-            else lines.add(new String[]{"Lector",publicName(week.readerId),"green"});
+            lines.add(new String[]{week.visit?"Participación":"Lector",week.visit?"Preguntas y Respuestas":publicName(week.readerId),"green"});
             lines.add(new String[]{"Canción final",mechanical==null?"Pendiente":mechanical.closingSong,"green"});
             addJpgMechanicalLine(lines,mechanical,Models.MechanicalRole.ORACION_FINAL,"Oración final");
             if(week.visit){
                 lines.add(new String[]{"DISCURSO FINAL","","blue"});
-                lines.add(new String[]{"Presenta","Superintendente de circuito","green"});
+                lines.add(new String[]{"Orador",speakerName(week),"green"});
                 lines.add(new String[]{"Tema",week.finalTalkTitle,"green"});
             }
             lines.add(new String[]{"TAREAS MECÁNICAS","","cyan"});
@@ -982,13 +981,12 @@ public final class MainActivity extends Activity {
         rows.append("<tr class='yellow'><th colspan='2'>ESTUDIO DE LA ATALAYA</th></tr>");
         rows.append("<tr><th>Conductor:</th><td>").append(printEscape(publicName(week.conductorId))).append("</td></tr>");
         rows.append("<tr><th>Tema:</th><td>").append(printEscape(week.watchtowerTopic)).append("</td></tr>");
-        if(week.visit) rows.append("<tr><th>Participación:</th><td>Preguntas y Respuestas</td></tr>");
-        else rows.append("<tr><th>Lector:</th><td>").append(printEscape(publicName(week.readerId))).append("</td></tr>");
+        rows.append("<tr><th>").append(week.visit?"Participación:":"Lector:").append("</th><td>").append(printEscape(week.visit?"Preguntas y Respuestas":publicName(week.readerId))).append("</td></tr>");
         rows.append("<tr><th>Canción final:</th><td>").append(printEscape(mechanical==null?"Pendiente":mechanical.closingSong)).append("</td></tr>");
         rows.append("<tr><th>Oración final:</th><td>").append(printEscape(mechanical==null?"Pendiente":publicName(mechanical.studentId(Models.MechanicalRole.ORACION_FINAL)))).append("</td></tr>");
         if(week.visit){
             rows.append("<tr class='blue'><th colspan='2'>DISCURSO FINAL</th></tr>");
-            rows.append("<tr><th>Presenta:</th><td>Superintendente de circuito</td></tr>");
+            rows.append("<tr><th>Orador:</th><td>").append(printEscape(speakerName(week))).append("</td></tr>");
             rows.append("<tr><th>Tema:</th><td>").append(printEscape(week.finalTalkTitle)).append("</td></tr>");
         }
         appendMechanicalPrintRow(rows,mechanical,Models.MechanicalRole.ENTRADA,"ACOMODADOR DE ENTRADA");
