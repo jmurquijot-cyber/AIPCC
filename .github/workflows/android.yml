@@ -1,5 +1,5 @@
 
-name: AIPCC Android Build v1.8.5
+name: AIPCC Android Build v1.8.7
 
 on:
   push:
@@ -26,13 +26,13 @@ jobs:
         run: gradle :app:assembleDebug
 
       - name: Rename debug APK with project version
-        run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/AIPCC-v1.8.5-debug.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/AIPCC-v1.8.7-debug.apk
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: AIPCC-v1.8.5-debug
-          path: app/build/outputs/apk/debug/AIPCC-v1.8.5-debug.apk
+          name: AIPCC-v1.8.7-debug
+          path: app/build/outputs/apk/debug/AIPCC-v1.8.7-debug.apk
 
       - name: Restore release keystore
         if: github.event_name != 'pull_request'
@@ -57,12 +57,12 @@ jobs:
 
       - name: Rename signed release APK with project version
         if: github.event_name != 'pull_request'
-        run: cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/AIPCC-v1.8.5-release.apk
+        run: cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/AIPCC-v1.8.7-release.apk
 
       - name: Upload signed release APK
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: AIPCC-v1.8.5-release
-          path: app/build/outputs/apk/release/AIPCC-v1.8.5-release.apk
+          name: AIPCC-v1.8.7-release
+          path: app/build/outputs/apk/release/AIPCC-v1.8.7-release.apk
           if-no-files-found: error
